@@ -96,7 +96,7 @@ public class App : Application
     {
         if (_bubbleWindow == null) return;
 
-        Dispatcher.UIThread.Post(async () =>
+        Dispatcher.UIThread.Post(() =>
         {
             if (notification != null)
             {
@@ -110,12 +110,12 @@ public class App : Application
                         _petWindow.Position.Y - 70
                     );
                 }
-                await _bubbleWindow.ShowAnimated();
+                _bubbleWindow.Show();
             }
             else
             {
                 ((BubbleViewModel)_bubbleWindow.DataContext!).Hide();
-                await _bubbleWindow.HideAnimated();
+                _bubbleWindow.Hide();
             }
         });
     }
