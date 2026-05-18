@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using AvaloniaClaudePet.Models;
 using AvaloniaClaudePet.Services;
@@ -28,6 +29,9 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Prevent app shutdown when pet window closes (minimize to tray)
+            desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
             // Core services
             _stateMachine = new PetStateMachine();
             _notificationService = new NotificationService(OnNotification);
@@ -40,7 +44,7 @@ public class App : Application
             _bubbleWindow = new BubbleWindow { DataContext = bubbleViewModel };
 
             // Start HTTP server
-            _httpServer = new HookHttpServer(_stateMachine, _notificationService.Show);
+            _httpServer = new HookHttpServer(_stateMachine, _notificationService.Show, _notificationService.Dismiss);
             await _httpServer.StartAsync();
 
             // Hook config service
@@ -49,14 +53,14 @@ public class App : Application
             // System tray
             SetupTrayIcon();
 
-            // Window events
-            _petWindow.Closed += OnPetWindowClosed;
+            // Close hides to tray instead of shutting down
+            _petWindow.Closing += (s, e) =>
+            {
+                e.Cancel = true;
+                ((Window)s!).Hide();
+            };
 
             desktop.MainWindow = _petWindow;
-
-            // Show bubble window (hidden initially)
-            _bubbleWindow.Show();
-            _bubbleWindow.Hide();
 
             // Auto-configure hooks if not configured
             if (!_hookConfigService.IsConfigured())
@@ -72,32 +76,38 @@ public class App : Application
     {
         if (_bubbleWindow == null) return;
 
-        if (notification != null)
+        Dispatcher.UIThread.Post(() =>
         {
-            var vm = (BubbleViewModel)_bubbleWindow.DataContext!;
-            vm.ShowNotification(notification);
-
-            // Position bubble above pet window
-            if (_petWindow != null)
+            if (notification != null)
             {
-                _bubbleWindow.Position = new PixelPoint(
-                    _petWindow.Position.X - 40,
-                    _petWindow.Position.Y - 70
-                );
+                var vm = (BubbleViewModel)_bubbleWindow.DataContext!;
+                vm.ShowNotification(notification);
+
+                if (_petWindow != null)
+                {
+                    _bubbleWindow.Position = new PixelPoint(
+                        _petWindow.Position.X - 40,
+                        _petWindow.Position.Y - 70
+                    );
+                }
+                _bubbleWindow.Show();
             }
-            _bubbleWindow.Show();
-        }
-        else
-        {
-            ((BubbleViewModel)_bubbleWindow.DataContext!).Hide();
-            _bubbleWindow.Hide();
-        }
+            else
+            {
+                ((BubbleViewModel)_bubbleWindow.DataContext!).Hide();
+                _bubbleWindow.Hide();
+            }
+        });
     }
 
     private void SetupTrayIcon()
     {
         var showPet = new NativeMenuItem("Show Pet");
-        showPet.Click += (_, _) => _petWindow?.Show();
+        showPet.Click += (_, _) =>
+        {
+            _petWindow?.Show();
+            _petWindow?.Activate();
+        };
 
         var configureHooks = new NativeMenuItem("Configure Hooks");
         configureHooks.Click += (_, _) => _hookConfigService?.ConfigureHooks();
@@ -116,9 +126,9 @@ public class App : Application
         };
 
         var quit = new NativeMenuItem("Quit");
-        quit.Click += (_, _) =>
+        quit.Click += async (_, _) =>
         {
-            _httpServer?.StopAsync().Wait();
+            if (_httpServer != null) await _httpServer.StopAsync();
             (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
         };
 
@@ -135,11 +145,5 @@ public class App : Application
             ToolTipText = "Claude Pet",
             IsVisible = true
         };
-    }
-
-    private void OnPetWindowClosed(object? sender, EventArgs e)
-    {
-        // Don't shutdown - minimize to tray
-        // The window closing just hides it
     }
 }

@@ -1,38 +1,33 @@
-using System.Collections.Immutable;
 using AvaloniaClaudePet.Models;
 
 namespace AvaloniaClaudePet.Services;
 
-public class StateTransition
-{
-    public PetState From { get; }
-    public PetTrigger Trigger { get; }
-    public PetState To { get; }
-
-    public StateTransition(PetState from, PetTrigger trigger, PetState to)
-    {
-        From = from;
-        Trigger = trigger;
-        To = to;
-    }
-}
-
 public class PetStateMachine
 {
+    private readonly object _lock = new();
     private PetState _currentState = PetState.Idle;
-    private PetState _stateBeforeNotification = PetState.Idle;
+    private PetState _stateBeforeTemporary = PetState.Idle;
     private readonly Dictionary<(PetState State, PetTrigger Trigger), PetState> _transitions;
     private CancellationTokenSource? _timerCts;
 
-    public PetState CurrentState => _currentState;
+    public PetState CurrentState
+    {
+        get { lock (_lock) { return _currentState; } }
+    }
 
     public event Action<PetState>? StateChanged;
 
-    // Temporary state durations
     private static readonly Dictionary<PetState, TimeSpan> TemporaryDurations = new()
     {
         { PetState.Error, TimeSpan.FromSeconds(2) },
         { PetState.Success, TimeSpan.FromSeconds(3) },
+    };
+
+    // Auto-revert targets: what state to return to after a temporary state expires
+    private static readonly Dictionary<PetState, PetState> TemporaryRevertTargets = new()
+    {
+        { PetState.Error, PetState.Idle },    // Error reverts to Idle per spec
+        { PetState.Success, PetState.Idle },  // Success reverts to Idle per spec
     };
 
     public PetStateMachine()
@@ -68,7 +63,7 @@ public class PetStateMachine
             (PetState.Working, PetTrigger.SessionEnd, PetState.Idle),
             (PetState.Working, PetTrigger.PromptSubmit, PetState.Thinking),
 
-            // Error (temporary - returns to previous state)
+            // Error (temporary - returns to working or idle)
             (PetState.Error, PetTrigger.ToolStart, PetState.Working),
             (PetState.Error, PetTrigger.PromptSubmit, PetState.Thinking),
             (PetState.Error, PetTrigger.Stop, PetState.Success),
@@ -99,36 +94,33 @@ public class PetStateMachine
 
     public bool Transition(PetTrigger trigger)
     {
-        // Handle notification triggers specially (overlay behavior)
-        if (trigger is PetTrigger.NotificationIdle or PetTrigger.NotificationPermission)
+        lock (_lock)
         {
-            if (_currentState != PetState.Waiting)
+            // Handle notification triggers specially (overlay behavior)
+            if (trigger is PetTrigger.NotificationIdle or PetTrigger.NotificationPermission)
             {
-                _stateBeforeNotification = _currentState;
+                if (_currentState != PetState.Waiting)
+                {
+                    _stateBeforeTemporary = _currentState;
+                }
+                SetStateLocked(PetState.Waiting);
+                return true;
             }
-            SetState(PetState.Waiting);
-            return true;
-        }
 
-        // Exit waiting state on any other trigger
-        if (_currentState == PetState.Waiting)
-        {
-            _timerCts?.Cancel();
-        }
+            if (_transitions.TryGetValue((_currentState, trigger), out var newState))
+            {
+                SetStateLocked(newState);
+                return true;
+            }
 
-        if (_transitions.TryGetValue((_currentState, trigger), out var newState))
-        {
-            SetState(newState);
-            return true;
+            return false;
         }
-
-        // Idempotent fallback: ignore unknown transitions
-        return false;
     }
 
-    private void SetState(PetState newState)
+    private void SetStateLocked(PetState newState)
     {
         _timerCts?.Cancel();
+        _timerCts = null;
 
         _currentState = newState;
         StateChanged?.Invoke(_currentState);
@@ -137,27 +129,27 @@ public class PetStateMachine
         if (TemporaryDurations.TryGetValue(newState, out var duration))
         {
             _timerCts = new CancellationTokenSource();
-            _ = AutoRevertAsync(newState, duration, _timerCts.Token);
+            var ct = _timerCts.Token;
+            var revertTo = TemporaryRevertTargets.GetValueOrDefault(newState, PetState.Idle);
+            _ = AutoRevertAsync(newState, revertTo, duration, ct);
         }
     }
 
-    private async Task AutoRevertAsync(PetState temporaryState, TimeSpan duration, CancellationToken ct)
+    private async Task AutoRevertAsync(PetState temporaryState, PetState revertTo, TimeSpan duration, CancellationToken ct)
     {
         try
         {
             await Task.Delay(duration, ct);
 
-            if (_currentState == temporaryState)
+            lock (_lock)
             {
-                var revertTo = temporaryState == PetState.Success ? PetState.Idle : _stateBeforeNotification;
-                if (revertTo == PetState.Waiting) revertTo = PetState.Idle;
-                _currentState = revertTo;
-                StateChanged?.Invoke(_currentState);
+                if (_currentState == temporaryState)
+                {
+                    _currentState = revertTo;
+                    StateChanged?.Invoke(_currentState);
+                }
             }
         }
-        catch (OperationCanceledException)
-        {
-            // Timer was cancelled, state was already changed
-        }
+        catch (OperationCanceledException) { }
     }
 }

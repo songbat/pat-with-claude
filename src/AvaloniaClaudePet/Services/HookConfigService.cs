@@ -8,6 +8,13 @@ public class HookConfigService
     private readonly int _port;
     private readonly string _settingsPath;
 
+    private static readonly HashSet<string> ManagedHookKeys = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse",
+        "PostToolUseFailure", "Notification", "Stop", "StopFailure",
+        "SubagentStart", "SubagentStop", "SessionEnd"
+    };
+
     public HookConfigService(int port)
     {
         _port = port;
@@ -25,8 +32,14 @@ public class HookConfigService
         {
             var json = File.ReadAllText(_settingsPath);
             var node = JsonNode.Parse(json);
-            var hooks = node?["hooks"];
-            return hooks != null && hooks.AsObject().Count > 0;
+            var hooks = node?["hooks"]?.AsObject();
+            if (hooks == null) return false;
+
+            // Check specifically for pet-managed hooks pointing to our port
+            var baseUrl = $"http://localhost:{_port}";
+            return hooks.Any(kvp =>
+                ManagedHookKeys.Contains(kvp.Key) &&
+                kvp.Value?.ToString().Contains(baseUrl) == true);
         }
         catch
         {
@@ -48,8 +61,16 @@ public class HookConfigService
             root = new JsonObject();
         }
 
-        var hooks = GenerateHooksConfig();
-        root["hooks"] = hooks;
+        var generatedHooks = GenerateHooksConfig();
+        var existingHooks = root["hooks"]?.AsObject() ?? new JsonObject();
+
+        // Merge: update only pet-managed keys, preserve everything else
+        foreach (var kvp in generatedHooks)
+        {
+            existingHooks[kvp.Key] = kvp.Value?.DeepClone();
+        }
+
+        root["hooks"] = existingHooks;
 
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(_settingsPath, root.ToJsonString(options));

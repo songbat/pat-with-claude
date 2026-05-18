@@ -7,21 +7,25 @@ using Microsoft.AspNetCore.Http;
 
 namespace AvaloniaClaudePet.Services;
 
-public class HookHttpServer : IDisposable
+public class HookHttpServer : IAsyncDisposable
 {
     private WebApplication? _app;
     private int _port;
     private readonly PetStateMachine _stateMachine;
     private readonly Action<NotificationInfo>? _onNotification;
+    private readonly Action? _dismissNotification;
     private bool _disposed;
 
     public int Port => _port;
     public bool IsRunning => _app != null;
 
-    public HookHttpServer(PetStateMachine stateMachine, Action<NotificationInfo>? onNotification = null)
+    public HookHttpServer(PetStateMachine stateMachine,
+        Action<NotificationInfo>? onNotification = null,
+        Action? dismissNotification = null)
     {
         _stateMachine = stateMachine;
         _onNotification = onNotification;
+        _dismissNotification = dismissNotification;
     }
 
     public async Task StartAsync(CancellationToken ct = default)
@@ -30,21 +34,22 @@ public class HookHttpServer : IDisposable
 
         var builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls($"http://localhost:{_port}");
+        builder.WebHost.ConfigureKestrel(o => o.Limits.MaxRequestBodySize = 1024 * 1024);
 
         _app = builder.Build();
 
         _app.MapGet("/health", () => Results.Json(new HealthResponse { Status = "healthy", Port = _port }));
 
-        _app.MapPost("/hooks/session-start", (HookPayload payload) => HandleHook(PetTrigger.SessionStart, payload));
-        _app.MapPost("/hooks/prompt-submit", (HookPayload payload) => HandleHook(PetTrigger.PromptSubmit, payload));
-        _app.MapPost("/hooks/pre-tool-use", (HookPayload payload) => HandleHook(PetTrigger.ToolStart, payload));
-        _app.MapPost("/hooks/post-tool-use", (HookPayload payload) => HandleHook(PetTrigger.ToolEnd, payload));
-        _app.MapPost("/hooks/tool-failure", (HookPayload payload) => HandleHook(PetTrigger.ToolFailure, payload));
-        _app.MapPost("/hooks/stop", (HookPayload payload) => HandleHook(PetTrigger.Stop, payload));
-        _app.MapPost("/hooks/stop-failure", (HookPayload payload) => HandleHook(PetTrigger.StopFailure, payload));
-        _app.MapPost("/hooks/subagent-start", (HookPayload payload) => HandleHook(PetTrigger.SubagentStart, payload));
-        _app.MapPost("/hooks/subagent-stop", (HookPayload payload) => HandleHook(PetTrigger.SubagentStop, payload));
-        _app.MapPost("/hooks/session-end", (HookPayload payload) => HandleHook(PetTrigger.SessionEnd, payload));
+        _app.MapPost("/hooks/session-start", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SessionStart, payload));
+        _app.MapPost("/hooks/prompt-submit", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.PromptSubmit, payload));
+        _app.MapPost("/hooks/pre-tool-use", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.ToolStart, payload));
+        _app.MapPost("/hooks/post-tool-use", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.ToolEnd, payload));
+        _app.MapPost("/hooks/tool-failure", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.ToolFailure, payload));
+        _app.MapPost("/hooks/stop", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.Stop, payload));
+        _app.MapPost("/hooks/stop-failure", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.StopFailure, payload));
+        _app.MapPost("/hooks/subagent-start", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SubagentStart, payload));
+        _app.MapPost("/hooks/subagent-stop", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SubagentStop, payload));
+        _app.MapPost("/hooks/session-end", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SessionEnd, payload));
 
         _app.MapPost("/hooks/notification/idle", (HookPayload payload) =>
         {
@@ -59,6 +64,12 @@ public class HookHttpServer : IDisposable
         });
 
         await _app.StartAsync(ct);
+    }
+
+    private IResult HandleHookWithDismiss(PetTrigger trigger, HookPayload payload)
+    {
+        _dismissNotification?.Invoke();
+        return HandleHook(trigger, payload);
     }
 
     private IResult HandleHook(PetTrigger trigger, HookPayload payload)
@@ -94,15 +105,15 @@ public class HookHttpServer : IDisposable
                 continue;
             }
         }
-        return startPort;
+        throw new InvalidOperationException($"No available port found in range {startPort}-{endPort}");
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         if (!_disposed)
         {
             _disposed = true;
-            _app?.DisposeAsync().AsTask().Wait();
+            if (_app != null) await _app.DisposeAsync();
         }
     }
 }
