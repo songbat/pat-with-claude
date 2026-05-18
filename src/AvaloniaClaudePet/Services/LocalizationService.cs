@@ -24,6 +24,10 @@ public class LocalizationService
         ["waiting"] = ("Waiting for you...", "等你回来..."),
         ["approval"] = ("Need approval!", "需要审批!"),
         ["tool_prefix"] = ("", ""),
+        ["menu_show"] = ("Show Pet", "显示宠物"),
+        ["menu_hooks"] = ("Configure Hooks", "配置钩子"),
+        ["menu_quit"] = ("Quit", "退出"),
+        ["menu_tooltip"] = ("Claude Pet", "Claude 宠物"),
     };
 
     public string this[string key]

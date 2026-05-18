@@ -21,6 +21,10 @@ public class App : Application
     private BubbleWindow? _bubbleWindow;
     private HookConfigService? _hookConfigService;
     private TrayIcon? _trayIcon;
+    private NativeMenuItem? _showPetItem;
+    private NativeMenuItem? _configureHooksItem;
+    private NativeMenuItem? _portInfoItem;
+    private NativeMenuItem? _quitItem;
 
     public override void Initialize()
     {
@@ -115,15 +119,15 @@ public class App : Application
 
     private void SetupTrayIcon()
     {
-        var showPet = new NativeMenuItem("Show Pet");
-        showPet.Click += (_, _) =>
+        _showPetItem = new NativeMenuItem(_localizationService?["menu_show"]);
+        _showPetItem.Click += (_, _) =>
         {
             _petWindow?.Show();
             _petWindow?.Activate();
         };
 
-        var configureHooks = new NativeMenuItem("Configure Hooks");
-        configureHooks.Click += (_, _) => _hookConfigService?.ConfigureHooks();
+        _configureHooksItem = new NativeMenuItem(_localizationService?["menu_hooks"]);
+        _configureHooksItem.Click += (_, _) => _hookConfigService?.ConfigureHooks();
 
         var toggleLang = new NativeMenuItem(_localizationService?.CurrentLabel ?? "中/EN");
         toggleLang.Click += (_, _) =>
@@ -135,8 +139,8 @@ public class App : Application
             }
         };
 
-        var portInfo = new NativeMenuItem($"Port: {_httpServer?.Port ?? 0}");
-        portInfo.Click += async (_, _) =>
+        _portInfoItem = new NativeMenuItem($"Port: {_httpServer?.Port ?? 0}");
+        _portInfoItem.Click += async (_, _) =>
         {
             if (_petWindow != null)
             {
@@ -148,26 +152,41 @@ public class App : Application
             }
         };
 
-        var quit = new NativeMenuItem("Quit");
-        quit.Click += async (_, _) =>
+        _quitItem = new NativeMenuItem(_localizationService?["menu_quit"]);
+        _quitItem.Click += async (_, _) =>
         {
             if (_httpServer != null) await _httpServer.StopAsync();
             (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
         };
 
         var menu = new NativeMenu();
-        menu.Items.Add(showPet);
-        menu.Items.Add(configureHooks);
+        menu.Items.Add(_showPetItem);
+        menu.Items.Add(_configureHooksItem);
         menu.Items.Add(toggleLang);
-        menu.Items.Add(portInfo);
+        menu.Items.Add(_portInfoItem);
         menu.Items.Add(new NativeMenuItemSeparator());
-        menu.Items.Add(quit);
+        menu.Items.Add(_quitItem);
 
         _trayIcon = new TrayIcon
         {
             Menu = menu,
-            ToolTipText = "Claude Pet",
+            ToolTipText = _localizationService?["menu_tooltip"] ?? "Claude Pet",
             IsVisible = true
         };
+
+        if (_localizationService != null)
+        {
+            _localizationService.LanguageChanged += UpdateMenuLabels;
+        }
+    }
+
+    private void UpdateMenuLabels()
+    {
+        if (_localizationService == null) return;
+        if (_showPetItem != null) _showPetItem.Header = _localizationService["menu_show"];
+        if (_configureHooksItem != null) _configureHooksItem.Header = _localizationService["menu_hooks"];
+        if (_portInfoItem != null) _portInfoItem.Header = $"Port: {_httpServer?.Port ?? 0}";
+        if (_quitItem != null) _quitItem.Header = _localizationService["menu_quit"];
+        if (_trayIcon != null) _trayIcon.ToolTipText = _localizationService["menu_tooltip"];
     }
 }
