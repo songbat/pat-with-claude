@@ -14,6 +14,7 @@ public class HookHttpServer : IAsyncDisposable
     private readonly PetStateMachine _stateMachine;
     private readonly Action<NotificationInfo>? _onNotification;
     private readonly Action? _dismissNotification;
+    private readonly Action<string, string?>? _onStatusUpdate;
     private bool _disposed;
 
     public int Port => _port;
@@ -21,11 +22,13 @@ public class HookHttpServer : IAsyncDisposable
 
     public HookHttpServer(PetStateMachine stateMachine,
         Action<NotificationInfo>? onNotification = null,
-        Action? dismissNotification = null)
+        Action? dismissNotification = null,
+        Action<string, string?>? onStatusUpdate = null)
     {
         _stateMachine = stateMachine;
         _onNotification = onNotification;
         _dismissNotification = dismissNotification;
+        _onStatusUpdate = onStatusUpdate;
     }
 
     public async Task StartAsync(CancellationToken ct = default)
@@ -40,16 +43,16 @@ public class HookHttpServer : IAsyncDisposable
 
         _app.MapGet("/health", () => Results.Json(new HealthResponse { Status = "healthy", Port = _port }));
 
-        _app.MapPost("/hooks/session-start", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SessionStart, payload));
-        _app.MapPost("/hooks/prompt-submit", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.PromptSubmit, payload));
-        _app.MapPost("/hooks/pre-tool-use", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.ToolStart, payload));
-        _app.MapPost("/hooks/post-tool-use", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.ToolEnd, payload));
-        _app.MapPost("/hooks/tool-failure", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.ToolFailure, payload));
-        _app.MapPost("/hooks/stop", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.Stop, payload));
-        _app.MapPost("/hooks/stop-failure", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.StopFailure, payload));
-        _app.MapPost("/hooks/subagent-start", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SubagentStart, payload));
-        _app.MapPost("/hooks/subagent-stop", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SubagentStop, payload));
-        _app.MapPost("/hooks/session-end", (HookPayload payload) => HandleHookWithDismiss(PetTrigger.SessionEnd, payload));
+        _app.MapPost("/hooks/session-start", (HookPayload payload) => HandleStatusHook(PetTrigger.SessionStart, "analyzing", payload));
+        _app.MapPost("/hooks/prompt-submit", (HookPayload payload) => HandleStatusHook(PetTrigger.PromptSubmit, "analyzing", payload));
+        _app.MapPost("/hooks/pre-tool-use", (HookPayload payload) => HandleToolHook(PetTrigger.ToolStart, payload));
+        _app.MapPost("/hooks/post-tool-use", (HookPayload payload) => HandleStatusHook(PetTrigger.ToolEnd, "processing", payload));
+        _app.MapPost("/hooks/tool-failure", (HookPayload payload) => HandleStatusHook(PetTrigger.ToolFailure, "failed", payload));
+        _app.MapPost("/hooks/stop", (HookPayload payload) => HandleStatusHook(PetTrigger.Stop, "done", payload));
+        _app.MapPost("/hooks/stop-failure", (HookPayload payload) => HandleStatusHook(PetTrigger.StopFailure, "failed", payload));
+        _app.MapPost("/hooks/subagent-start", (HookPayload payload) => HandleStatusHook(PetTrigger.SubagentStart, "delegating", payload));
+        _app.MapPost("/hooks/subagent-stop", (HookPayload payload) => HandleStatusHook(PetTrigger.SubagentStop, "processing", payload));
+        _app.MapPost("/hooks/session-end", (HookPayload payload) => HandleStatusHook(PetTrigger.SessionEnd, "", payload));
 
         _app.MapPost("/hooks/notification/idle", (HookPayload payload) =>
         {
@@ -66,12 +69,33 @@ public class HookHttpServer : IAsyncDisposable
         await _app.StartAsync(ct);
     }
 
-    private IResult HandleHookWithDismiss(PetTrigger trigger, HookPayload payload)
+    private IResult HandleStatusHook(PetTrigger trigger, string statusKey, HookPayload payload)
     {
         _dismissNotification?.Invoke();
+        _onStatusUpdate?.Invoke(statusKey, null);
         return HandleHook(trigger, payload);
     }
 
+    private IResult HandleToolHook(PetTrigger trigger, HookPayload payload)
+    {
+        _dismissNotification?.Invoke();
+        var toolName = ExtractToolName(payload);
+        _onStatusUpdate?.Invoke("processing", toolName);
+        return HandleHook(trigger, payload);
+    }
+
+    private static string? ExtractToolName(HookPayload payload)
+    {
+        try
+        {
+            if (payload.Input.HasValue && payload.Input.Value.TryGetProperty("tool_name", out var toolNameEl))
+            {
+                return toolNameEl.GetString();
+            }
+        }
+        catch { }
+        return null;
+    }
     private IResult HandleHook(PetTrigger trigger, HookPayload payload)
     {
         _stateMachine.Transition(trigger);

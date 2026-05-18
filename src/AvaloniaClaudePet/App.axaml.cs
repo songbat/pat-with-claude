@@ -15,6 +15,8 @@ public class App : Application
     private PetStateMachine? _stateMachine;
     private HookHttpServer? _httpServer;
     private NotificationService? _notificationService;
+    private LocalizationService? _localizationService;
+    private PetViewModel? _petViewModel;
     private PetWindow? _petWindow;
     private BubbleWindow? _bubbleWindow;
     private HookConfigService? _hookConfigService;
@@ -29,31 +31,30 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            // Prevent app shutdown when pet window closes (minimize to tray)
             desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
             // Core services
             _stateMachine = new PetStateMachine();
             _notificationService = new NotificationService(OnNotification);
+            _localizationService = new LocalizationService();
 
-            var petViewModel = new PetViewModel(_stateMachine);
+            _petViewModel = new PetViewModel(_stateMachine, _localizationService);
             var bubbleViewModel = new BubbleViewModel();
 
-            // Create windows
-            _petWindow = new PetWindow { DataContext = petViewModel };
+            _petWindow = new PetWindow { DataContext = _petViewModel };
             _bubbleWindow = new BubbleWindow { DataContext = bubbleViewModel };
 
-            // Start HTTP server
-            _httpServer = new HookHttpServer(_stateMachine, _notificationService.Show, _notificationService.Dismiss);
+            _httpServer = new HookHttpServer(
+                _stateMachine,
+                _notificationService.Show,
+                _notificationService.Dismiss,
+                OnStatusUpdate);
             await _httpServer.StartAsync();
 
-            // Hook config service
             _hookConfigService = new HookConfigService(_httpServer.Port);
 
-            // System tray
             SetupTrayIcon();
 
-            // Close hides to tray instead of shutting down
             _petWindow.Closing += (s, e) =>
             {
                 e.Cancel = true;
@@ -62,7 +63,6 @@ public class App : Application
 
             desktop.MainWindow = _petWindow;
 
-            // Auto-configure hooks if not configured
             if (!_hookConfigService.IsConfigured())
             {
                 _hookConfigService.ConfigureHooks();
@@ -70,6 +70,19 @@ public class App : Application
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private void OnStatusUpdate(string statusKey, string? toolName)
+    {
+        if (_petViewModel == null) return;
+        if (string.IsNullOrEmpty(statusKey))
+        {
+            _petViewModel.ClearStatus();
+        }
+        else
+        {
+            _petViewModel.UpdateStatus(statusKey, toolName);
+        }
     }
 
     private void OnNotification(NotificationInfo? notification)
@@ -112,6 +125,16 @@ public class App : Application
         var configureHooks = new NativeMenuItem("Configure Hooks");
         configureHooks.Click += (_, _) => _hookConfigService?.ConfigureHooks();
 
+        var toggleLang = new NativeMenuItem(_localizationService?.CurrentLabel ?? "中/EN");
+        toggleLang.Click += (_, _) =>
+        {
+            if (_localizationService != null)
+            {
+                _localizationService.Toggle();
+                toggleLang.Header = _localizationService.CurrentLabel;
+            }
+        };
+
         var portInfo = new NativeMenuItem($"Port: {_httpServer?.Port ?? 0}");
         portInfo.Click += async (_, _) =>
         {
@@ -135,6 +158,7 @@ public class App : Application
         var menu = new NativeMenu();
         menu.Items.Add(showPet);
         menu.Items.Add(configureHooks);
+        menu.Items.Add(toggleLang);
         menu.Items.Add(portInfo);
         menu.Items.Add(new NativeMenuItemSeparator());
         menu.Items.Add(quit);
