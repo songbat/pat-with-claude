@@ -1,0 +1,19 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ctrl="using:AvaloniaClaudePet.Controls"
+        x:Class="AvaloniaClaudePet.Views.PetWindow"
+        Title="Claude Pet"
+        Width="200" Height="128"
+        SystemDecorations="None"
+        ShowInTaskbar="False"
+        Background="Transparent"
+        x:CompileBindings="False">
+
+    <Panel>
+        <ctrl:PetControl Expression="{Binding CurrentExpression}"
+                         StatusText="{Binding StatusText}" />
+        <Panel Background="Transparent"
+               x:Name="DragHandle"
+               Cursor="SizeAll"/>
+    </Panel>
+</Window>

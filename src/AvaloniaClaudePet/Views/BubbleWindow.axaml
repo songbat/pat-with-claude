@@ -1,0 +1,29 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="AvaloniaClaudePet.Views.BubbleWindow"
+        Title="Notification"
+        Width="240" Height="60"
+        SystemDecorations="None"
+        ShowInTaskbar="False"
+        x:CompileBindings="False">
+
+    <Border CornerRadius="12"
+            Background="#D9FFFFFF"
+            BoxShadow="0 2 8 0 #30000000"
+            ClipToBounds="True"
+            Padding="12,8">
+        <StackPanel Orientation="Horizontal"
+                    Spacing="8"
+                    VerticalAlignment="Center">
+            <TextBlock Text="{Binding Icon}"
+                       FontSize="20"
+                       VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding Message}"
+                       FontSize="13"
+                       Foreground="#333333"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="180"/>
+        </StackPanel>
+    </Border>
+</Window>
