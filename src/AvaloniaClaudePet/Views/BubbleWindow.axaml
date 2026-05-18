@@ -5,7 +5,13 @@
         Width="240" Height="60"
         SystemDecorations="None"
         ShowInTaskbar="False"
+        Background="Transparent"
         x:CompileBindings="False">
+    <Window.Transitions>
+        <Transitions>
+            <DoubleTransition Property="Opacity" Duration="0:0:0.3" Easing="CubicEaseInOut" />
+        </Transitions>
+    </Window.Transitions>
 
     <Border CornerRadius="12"
             Background="#D9FFFFFF"

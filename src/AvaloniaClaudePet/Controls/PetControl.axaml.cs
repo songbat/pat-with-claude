@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Threading;
 
 namespace AvaloniaClaudePet.Controls;
 
@@ -250,7 +251,13 @@ public partial class PetControl : UserControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == ExpressionProperty || change.Property == StatusTextProperty)
+        if (change.Property == ExpressionProperty)
+        {
+            Opacity = 0.3;
+            InvalidateVisual();
+            Dispatcher.UIThread.Post(() => Opacity = 1.0);
+        }
+        else if (change.Property == StatusTextProperty)
         {
             InvalidateVisual();
         }
