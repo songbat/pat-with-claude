@@ -47,7 +47,7 @@ public class PetStateMachine
             // Thinking
             (PetState.Thinking, PetTrigger.ToolStart, PetState.Working),
             (PetState.Thinking, PetTrigger.SubagentStart, PetState.Thinking),
-            (PetState.Thinking, PetTrigger.Stop, PetState.Success),
+            (PetState.Thinking, PetTrigger.Stop, PetState.Waiting),
             (PetState.Thinking, PetTrigger.StopFailure, PetState.Error),
             (PetState.Thinking, PetTrigger.SessionEnd, PetState.Idle),
             (PetState.Thinking, PetTrigger.PromptSubmit, PetState.Thinking),
@@ -58,7 +58,7 @@ public class PetStateMachine
             (PetState.Working, PetTrigger.ToolFailure, PetState.Error),
             (PetState.Working, PetTrigger.SubagentStart, PetState.Thinking),
             (PetState.Working, PetTrigger.SubagentStop, PetState.Working),
-            (PetState.Working, PetTrigger.Stop, PetState.Success),
+            (PetState.Working, PetTrigger.Stop, PetState.Waiting),
             (PetState.Working, PetTrigger.StopFailure, PetState.Error),
             (PetState.Working, PetTrigger.SessionEnd, PetState.Idle),
             (PetState.Working, PetTrigger.PromptSubmit, PetState.Thinking),
@@ -66,7 +66,7 @@ public class PetStateMachine
             // Error (temporary - returns to working or idle)
             (PetState.Error, PetTrigger.ToolStart, PetState.Working),
             (PetState.Error, PetTrigger.PromptSubmit, PetState.Thinking),
-            (PetState.Error, PetTrigger.Stop, PetState.Success),
+            (PetState.Error, PetTrigger.Stop, PetState.Waiting),
             (PetState.Error, PetTrigger.StopFailure, PetState.Error),
             (PetState.Error, PetTrigger.SessionEnd, PetState.Idle),
 
@@ -81,7 +81,7 @@ public class PetStateMachine
             (PetState.Waiting, PetTrigger.PromptSubmit, PetState.Thinking),
             (PetState.Waiting, PetTrigger.ToolStart, PetState.Working),
             (PetState.Waiting, PetTrigger.SessionEnd, PetState.Idle),
-            (PetState.Waiting, PetTrigger.Stop, PetState.Success),
+            (PetState.Waiting, PetTrigger.Stop, PetState.Waiting),
         };
 
         var dict = new Dictionary<(PetState, PetTrigger), PetState>();

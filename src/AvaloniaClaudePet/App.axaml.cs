@@ -1,6 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.Themes.Fluent;
 using AvaloniaClaudePet.Models;
@@ -171,6 +174,7 @@ public class App : Application
         {
             Menu = menu,
             ToolTipText = _localizationService?["menu_tooltip"] ?? "Claude Pet",
+            Icon = GenerateTrayIcon(),
             IsVisible = true
         };
 
@@ -188,5 +192,60 @@ public class App : Application
         if (_portInfoItem != null) _portInfoItem.Header = $"Port: {_httpServer?.Port ?? 0}";
         if (_quitItem != null) _quitItem.Header = _localizationService["menu_quit"];
         if (_trayIcon != null) _trayIcon.ToolTipText = _localizationService["menu_tooltip"];
+    }
+
+    private static WindowIcon GenerateTrayIcon()
+    {
+        var size = 32;
+        var bitmap = new RenderTargetBitmap(new PixelSize(size, size));
+        using var ctx = bitmap.CreateDrawingContext();
+
+        var cx = size / 2.0;
+        var cy = size / 2.0 + 2;
+        var headR = 12.0;
+        var color = Color.FromRgb(180, 180, 180);
+        var darkColor = Color.FromRgb(144, 144, 144);
+        var black = new SolidColorBrush(Colors.Black);
+        var white = new SolidColorBrush(Colors.White);
+
+        // Head
+        ctx.DrawEllipse(new SolidColorBrush(color), null, new Rect(cx - headR, cy - headR, headR * 2, headR * 2));
+
+        // Ears
+        var earBrush = new SolidColorBrush(darkColor);
+        ctx.DrawGeometry(earBrush, null, CreateTriangle(cx - 9, cy - 8, cx - 4, cy - 16, cx - 1, cy - 9));
+        ctx.DrawGeometry(earBrush, null, CreateTriangle(cx + 9, cy - 8, cx + 4, cy - 16, cx + 1, cy - 9));
+
+        // Eyes
+        foreach (var ox in new[] { -4, 4 })
+        {
+            ctx.DrawEllipse(white, null, new Rect(cx + ox - 2, cy - 2 - 2, 4, 4));
+            ctx.DrawEllipse(black, null, new Rect(cx + ox - 1.5, cy - 2 - 1.5, 3, 3));
+            ctx.DrawEllipse(white, null, new Rect(cx + ox + 0.5 - 0.5, cy - 3 - 0.5, 1, 1));
+        }
+
+        // Mouth
+        var stream = new StreamGeometry();
+        using (var sctx = stream.Open())
+        {
+            sctx.BeginFigure(new Point(cx - 2, cy + 3), false);
+            sctx.QuadraticBezierTo(new Point(cx, cy + 5), new Point(cx + 2, cy + 3));
+        }
+        ctx.DrawGeometry(null, new Pen(black, 0.8), stream);
+
+        using var ms = new MemoryStream();
+        bitmap.Save(ms);
+        ms.Position = 0;
+        return new WindowIcon(ms);
+    }
+
+    private static PathGeometry CreateTriangle(double x1, double y1, double x2, double y2, double x3, double y3)
+    {
+        var geo = new PathGeometry();
+        var fig = new PathFigure { StartPoint = new Point(x1, y1), IsClosed = true };
+        fig.Segments.Add(new LineSegment { Point = new Point(x2, y2) });
+        fig.Segments.Add(new LineSegment { Point = new Point(x3, y3) });
+        geo.Figures.Add(fig);
+        return geo;
     }
 }

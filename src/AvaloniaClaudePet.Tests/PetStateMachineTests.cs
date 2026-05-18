@@ -41,13 +41,13 @@ public class PetStateMachineTests
     }
 
     [Fact]
-    public void Stop_FromWorking_GoesToSuccess()
+    public void Stop_FromWorking_GoesToWaiting()
     {
         var sm = new PetStateMachine();
         sm.Transition(PetTrigger.PromptSubmit);
         sm.Transition(PetTrigger.ToolStart);
         sm.Transition(PetTrigger.Stop);
-        Assert.Equal(PetState.Success, sm.CurrentState);
+        Assert.Equal(PetState.Waiting, sm.CurrentState);
     }
 
     [Fact]

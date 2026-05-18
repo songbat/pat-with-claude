@@ -22,6 +22,7 @@ public class LocalizationService
         ["done"] = ("Done!", "完成!"),
         ["failed"] = ("Failed!", "失败!"),
         ["waiting"] = ("Waiting for you...", "等你回来..."),
+        ["waiting_answer"] = ("Waiting for answer...", "等待回答..."),
         ["approval"] = ("Need approval!", "需要审批!"),
         ["tool_prefix"] = ("", ""),
         ["menu_show"] = ("Show Pet", "显示宠物"),

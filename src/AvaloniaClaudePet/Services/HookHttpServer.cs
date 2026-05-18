@@ -48,7 +48,7 @@ public class HookHttpServer : IAsyncDisposable
         _app.MapPost("/hooks/pre-tool-use", (HookPayload payload) => HandleToolHook(PetTrigger.ToolStart, payload));
         _app.MapPost("/hooks/post-tool-use", (HookPayload payload) => HandleStatusHook(PetTrigger.ToolEnd, "processing", payload));
         _app.MapPost("/hooks/tool-failure", (HookPayload payload) => HandleStatusHook(PetTrigger.ToolFailure, "failed", payload));
-        _app.MapPost("/hooks/stop", (HookPayload payload) => HandleStatusHook(PetTrigger.Stop, "done", payload));
+        _app.MapPost("/hooks/stop", (HookPayload payload) => HandleStatusHook(PetTrigger.Stop, "waiting_answer", payload));
         _app.MapPost("/hooks/stop-failure", (HookPayload payload) => HandleStatusHook(PetTrigger.StopFailure, "failed", payload));
         _app.MapPost("/hooks/subagent-start", (HookPayload payload) => HandleStatusHook(PetTrigger.SubagentStart, "delegating", payload));
         _app.MapPost("/hooks/subagent-stop", (HookPayload payload) => HandleStatusHook(PetTrigger.SubagentStop, "processing", payload));

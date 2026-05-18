@@ -105,7 +105,7 @@ public class PetViewModel : INotifyPropertyChanged
                 PetState.Working => "processing",
                 PetState.Success => "done",
                 PetState.Error => "failed",
-                PetState.Waiting => "waiting",
+                PetState.Waiting => "waiting_answer",
                 _ => ""
             };
 

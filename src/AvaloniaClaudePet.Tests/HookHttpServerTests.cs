@@ -62,14 +62,14 @@ public class HookHttpServerTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task Stop_TransitionsToSuccess()
+    public async Task Stop_TransitionsToWaiting()
     {
         _stateMachine.Transition(PetTrigger.PromptSubmit);
         _stateMachine.Transition(PetTrigger.ToolStart);
         var payload = new HookPayload { SessionId = "test", HookEventName = "Stop" };
         var resp = await _client.PostAsJsonAsync("/hooks/stop", payload);
         resp.EnsureSuccessStatusCode();
-        Assert.Equal(PetState.Success, _stateMachine.CurrentState);
+        Assert.Equal(PetState.Waiting, _stateMachine.CurrentState);
     }
 
     [Fact]
